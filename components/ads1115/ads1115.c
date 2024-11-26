@@ -12,7 +12,9 @@ ads1115_mux_t A2 = ADS1115_MUX_2_GND;
 ads1115_mux_t A3 = ADS1115_MUX_3_GND;
 
 double valor;
-double tensao_backlight;
+// double tensao_backlight;
+
+double tensao_backlight, tensao_capslock, tensao_F4, tensao_bateria;
 
 static void IRAM_ATTR gpio_isr_handler(void* arg) {
   const bool ret = 1; // dummy value to pass to queue
@@ -209,16 +211,31 @@ void read_voltage_task(void *pvParameter) {
 
     ads1115_t my_ads = ads1115_config(I2C_MASTER_NUM, 0x48); // Inicialize o ADS1115
     // ads1115_set_mux(&my_ads, A3); // Seleciona A0, a1, A2 ou A3 em relação ao GND
-    ads1115_set_mux(&my_ads, A0);
+    // ads1115_set_mux(&my_ads, A0);
 
 
     while (1) {
-        // valor = 2*ads1115_get_voltage(&my_ads);
-        //printf("Valor capslock: %.2lf V\n", valor);
-        tensao_backlight = 2*ads1115_get_voltage((&my_ads));
-        // printf("Valor capslock: %.2lf V\n", valor);
-        printf("Valor backlight: %.2lf V\n", tensao_backlight);
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Aguarda 1 segundo
+        // Lê backlight (A0)
+        ads1115_set_mux(&my_ads, A0);
+        tensao_backlight = 2*ads1115_get_voltage(&my_ads);
+        
+        // Lê capslock (A1)
+        ads1115_set_mux(&my_ads, A1);
+        tensao_capslock = 2*ads1115_get_voltage(&my_ads);
+        
+        // Lê F4 (A2)
+        ads1115_set_mux(&my_ads, A2);
+        tensao_F4 = 2*ads1115_get_voltage(&my_ads);
+        
+        // Lê bateria (A3)
+        ads1115_set_mux(&my_ads, A3);
+        tensao_bateria = 2*ads1115_get_voltage(&my_ads);
+
+        // Imprime todos os valores
+        printf("Backlight: %.2lf V | Capslock: %.2lf V | F4: %.2lf V | Bateria: %.2lf V\n", 
+               tensao_backlight, tensao_capslock, tensao_F4, tensao_bateria);
+        
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 

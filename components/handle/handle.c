@@ -31,6 +31,8 @@
 #include "handle.h"
 #include "ads1115.h"
 
+#define THRESHOLD_TENSAO 1.0
+
 TaskHandle_t handle_receive_task = NULL;
 
 extern ads1115_mux_t A0;
@@ -181,8 +183,10 @@ int action_post(cJSON *data)
     // comando para chavear um periférico
     if (!strcmp(cmd, "all_keys"))
     {
-        cJSON *kb_matrix = cJSON_GetObjectItem(data, "keyboard_matrix");
-        press_keys(kb_matrix);
+        cJSON *keyboard_test = cJSON_GetObjectItem(data, "keyboard_test");
+        cJSON *kb_matrix = cJSON_GetObjectItem(keyboard_test, "keyboard_matrix");
+        cJSON *delay_press = cJSON_GetObjectItem(keyboard_test, "delay_press");
+        press_keys(kb_matrix, delay_press); // Se eu não quiser mandar nada eu coloco NULL do segundo parametro
         
         ESP_LOGI(TAG, "ALL KEYS EXECUTADO");
         send_data(REPLY, NULL, NULL, NULL);
@@ -208,8 +212,21 @@ int action_post(cJSON *data)
     else if (!strcmp(cmd, "key_led"))
     {
         
-        cJSON *kb_matrix = cJSON_GetObjectItem(data, "keyboard_matrix");
-        press_keys(kb_matrix);
+        cJSON *keyboard_test = cJSON_GetObjectItem(data, "keyboard_test");
+        if (keyboard_test == NULL)
+        return ESP_FAIL;
+
+        // Obtém o delay de pressionamento configurável
+        cJSON *delay_press = cJSON_GetObjectItem(keyboard_test, "delay_press");
+        if(delay_press == NULL)
+            return ESP_FAIL;
+
+        cJSON *kb_matrix = cJSON_GetObjectItem(keyboard_test, "keyboard_matrix");
+        if(kb_matrix == NULL)
+            return ESP_FAIL;
+
+        // cJSON *kb_matrix = cJSON_GetObjectItem(data, "keyboard_matrix");
+        // press_keys(kb_matrix);
 
         cJSON *led_matrix = cJSON_GetObjectItem(data, "led_matrix");
         if (led_matrix == NULL)
@@ -228,8 +245,99 @@ int action_post(cJSON *data)
             if (pin == NULL || voltage == NULL)
                 return ESP_FAIL;
         }
+
+        // O inicio tem que ser feito aqui.
+
         // PASSA NOVAMENTE PELO ARRAY EXECUTANDO AS TECLAS CASO TODAS ESTEJAM CORRETAS NO JSON
         ads1115_t my_ads = ads1115_config(I2C_MASTER_NUM, 0x48); // Inicialize o ADS1115
+
+        // Verificação inicial da tensão do capslock
+        for(int i=0; i < n_size; i++)
+        {
+            cJSON *pin = cJSON_GetObjectItem(cJSON_GetArrayItem(led_matrix, i), "pin");
+            cJSON *voltage = cJSON_GetObjectItem(cJSON_GetArrayItem(led_matrix, i), "voltage");
+
+            if(pin->valueint == 1) 
+            { 
+                // Adicionar múltiplas leituras para maior confiabilidade
+                double initial_voltage = 0;
+                const int NUM_READINGS = 5;
+                
+                for(int j = 0; j < NUM_READINGS; j++) {
+                    ads1115_set_mux(&my_ads, A1);
+                    initial_voltage += 2*ads1115_get_voltage(&my_ads);
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
+                initial_voltage /= NUM_READINGS;
+                
+                printf("Tensao inicial do Capslock: %.2f V\n", initial_voltage);
+                if(initial_voltage > THRESHOLD_TENSAO) 
+                {
+                    printf("Tensao acima do Threshold, vou desligar\n");
+                    press_keys(kb_matrix, delay_press);
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    
+                    // Verificar se realmente desligou
+                    double check_voltage = 0;
+                    for(int j = 0; j < NUM_READINGS; j++) {
+                        ads1115_set_mux(&my_ads, A1);
+                        check_voltage += 2*ads1115_get_voltage(&my_ads);
+                        vTaskDelay(pdMS_TO_TICKS(100));
+                    }
+                    check_voltage /= NUM_READINGS;
+                    
+                    if(check_voltage > THRESHOLD_TENSAO) {
+                        printf("Falha ao desligar Capslock. Tensao: %.2f V\n", check_voltage);
+                        // Tentar desligar novamente ou retornar erro
+                    }
+                }
+            }
+
+            // Aqui é para o F4
+            else if(pin->valueint == 2) 
+            { 
+                // Adicionar múltiplas leituras para maior confiabilidade
+                double initial_voltage = 0;
+                const int NUM_READINGS = 5;
+                
+                for(int j = 0; j < NUM_READINGS; j++) {
+                    ads1115_set_mux(&my_ads, A2);
+                    initial_voltage += 2*ads1115_get_voltage(&my_ads);
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
+                initial_voltage /= NUM_READINGS;
+                
+                printf("Tensao inicial do F4: %.2f V\n", initial_voltage);
+                if(initial_voltage > THRESHOLD_TENSAO) 
+                {
+                    printf("Tensao F4 acima do Threshold, vou desligar\n");
+                    press_keys(kb_matrix, delay_press);
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    
+                    // Verificar se realmente desligou
+                    double check_voltage = 0;
+                    for(int j = 0; j < NUM_READINGS; j++) {
+                        ads1115_set_mux(&my_ads, A2);
+                        check_voltage += 2*ads1115_get_voltage(&my_ads);
+                        vTaskDelay(pdMS_TO_TICKS(100));
+                    }
+                    check_voltage /= NUM_READINGS;
+                    
+                    if(check_voltage > THRESHOLD_TENSAO) {
+                        printf("Falha ao desligar F4. Tensao: %.2f V\n", check_voltage);
+                        // Tentar desligar novamente ou retornar erro
+                    }
+                }
+            }
+        }
+
+        // Executa a sequencia normal
+        printf("Iniciando a rotina normal, vou pressionar a tecla\n");
+        //TODO: Testar todos os press_keys(colocando NULL no segundo parametro)
+        press_keys(kb_matrix, delay_press); // Point 2
+        vTaskDelay(pdMS_TO_TICKS(100));
+
+        // Leitura das tensões
         for (int i = 0; i < n_size; i++)
         {
             cJSON *pin = cJSON_GetObjectItem(cJSON_GetArrayItem(led_matrix, i), "pin");
@@ -245,9 +353,12 @@ int action_post(cJSON *data)
             voltage->valuedouble = 2*ads1115_get_voltage(&my_ads);
         }
 
-        vTaskDelay(100); // TODO Verificar a necessidade desse delay e se dá pra diminuir
+        // vTaskDelay(pdMS_TO_TICKS(100)); 
         send_data(REPLY, NULL, NULL, data);
-        press_keys(kb_matrix);  // Desativar o capslock no final
+        printf("Agora vou desativar a tecla\n");
+        printf("Antes de desativar o capslock\n");
+        press_keys(kb_matrix, delay_press);  // Desativar o capslock no final // Point 3
+        printf("Desativou o capslock\n");
         return ESP_OK;
        
     }
@@ -373,7 +484,7 @@ esp_err_t transmit_payload(char *action, cJSON *data)
     return ESP_OK;
 }
 
-cJSON* press_keys(cJSON *kb_matrix)
+cJSON* press_keys(cJSON *kb_matrix, cJSON *delay_press)
 {
         if (kb_matrix == NULL)
             return NULL;
@@ -401,6 +512,12 @@ cJSON* press_keys(cJSON *kb_matrix)
 
             printf("ksi %d, kso %d, fn %d\n", ksi_js->valueint, kso_js->valueint, fn_js->valueint);
             press_single_fn_mode(ksi_js->valueint, kso_js->valueint, fn_js->valueint);
+            //TODO: Colocar um if aqui. Se delay_press for NULL não executa esse delay
+            if(delay_press != NULL)
+            {
+                vTaskDelay(pdMS_TO_TICKS(delay_press->valueint));
+            }
+            //TODO: Tentar colocar um delay aqui configurável pelo JSON
         }
         return kb_matrix;
 }

@@ -55,7 +55,7 @@
     void payload_handle(char* action, cJSON *payload);
     int action_get(void);
     int action_record(char *id_json);
-    cJSON* press_keys(cJSON *data);
+    cJSON* press_keys(cJSON *kb_matrix, cJSON *delay_press);
 
 
 #endif

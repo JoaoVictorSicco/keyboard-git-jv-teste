@@ -512,6 +512,8 @@ cJSON* press_keys(cJSON *kb_matrix, cJSON *delay_press)
 
             printf("ksi %d, kso %d, fn %d\n", ksi_js->valueint, kso_js->valueint, fn_js->valueint);
             press_single_fn_mode(ksi_js->valueint, kso_js->valueint, fn_js->valueint);
+
+            
             //TODO: Colocar um if aqui. Se delay_press for NULL não executa esse delay
             if(delay_press != NULL)
             {

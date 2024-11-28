@@ -55,9 +55,9 @@ esp_err_t init_keyboard(void){
 
 
 esp_err_t disable_all_ksi(void){
-    vTaskDelay(DELAY_PRESS);
+    vTaskDelay(DELAY_PRESS); 
     gpio_set_level(ENABLE_KSI_IC3, DESELECTED);
-    vTaskDelay(1);
+    // vTaskDelay(1);
 
     gpio_set_level(KSI_SI1, OFF);
     gpio_set_level(KSI_SI2, OFF);
@@ -68,7 +68,7 @@ esp_err_t disable_all_ksi(void){
 }
 
 esp_err_t disable_all_kso(uint8_t kso){
-    vTaskDelay(DELAY_PRESS);
+    vTaskDelay(DELAY_PRESS); 
 
     gpio_set_level(ENABLE_KSO_IC4, DESELECTED);
     gpio_set_level(ENABLE_KSO_IC5, DESELECTED);
